@@ -1,5 +1,5 @@
 [project]
-name = "packager"
+name = "bindle"
 version = "0.1.0"
 description = "Bundle ELF executables and their dynamic library dependencies into portable directories"
 readme = "README.md"
@@ -8,7 +8,7 @@ authors = [
     { name = "Matteo Bernabito", email = "matteo@bernabito.it" },
 ]
 license = "MIT"
-keywords = ["elf", "packaging", "ldd", "rpath", "portable", "distribution"]
+keywords = ["elf", "bindle", "ldd", "rpath", "portable", "distribution"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -21,4 +21,8 @@ classifiers = [
 ]
 
 [project.scripts]
-packager = "packager.core:main"
+bindle = "bindle.core:main"
+
+[build-system]
+requires = ["uv-build"]
+build-backend = "uv_build"

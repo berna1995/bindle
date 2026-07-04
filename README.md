@@ -1,6 +1,6 @@
-# Packager
+# bindle
 
-**Packager** is a Linux CLI tool that bundles ELF executables together with all their dynamically-linked shared library dependencies into a portable directory structure. It resolves library paths via `ldd`, copies only the necessary `.so` files (excluding core system libraries), and patches RPATH entries using `patchelf` so the resulting bundle is self-contained and relocatable.
+**bindle** is a Linux CLI tool that bundles ELF executables together with all their dynamically-linked shared library dependencies into a portable directory structure. It resolves library paths via `ldd`, copies only the necessary `.so` files (excluding core system libraries), and patches RPATH entries using `patchelf` so the resulting bundle is self-contained and relocatable.
 
 ## How it works
 
@@ -46,10 +46,16 @@ uv tool install .
 pip install .
 ```
 
+You can also use it directly without installation via:
+
+```bash
+uv run bindle <executables> -o <output>
+```
+
 ## Usage
 
 ```bash
-packager /usr/bin/ffmpeg /usr/bin/ffprobe -o ./ffmpeg-bundle
+bindle /usr/bin/ffmpeg /usr/bin/ffprobe -o ./ffmpeg-bundle
 ```
 
 This creates:
@@ -75,7 +81,7 @@ runtime dependencies are packed internally.
 ## CLI
 
 ```
-usage: packager [-h] -o OUTPUT executables [executables ...]
+usage: bindle [-h] -o OUTPUT executables [executables ...]
 
 Package executables and their dynamically linked libraries for distribution.
 
@@ -91,7 +97,7 @@ options:
 
 ```bash
 # Run directly via uv
-uv run packager <executables> -o <output>
+uv run bindle <executables> -o <output>
 ```
 
 ## License
