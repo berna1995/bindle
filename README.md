@@ -81,7 +81,8 @@ runtime dependencies are packed internally.
 ## CLI
 
 ```
-usage: bindle [-h] -o OUTPUT executables [executables ...]
+usage: bindle [-h] -o OUTPUT [--hard-fail | --no-hard-fail]
+              executables [executables ...]
 
 Package executables and their dynamically linked libraries for distribution.
 
@@ -90,7 +91,12 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -o, --output OUTPUT   Destination directory path (will be created if it does not exist).
+  -o, --output OUTPUT   Destination directory path (will be created if it does
+                        not exist).
+  --hard-fail, --no-hard-fail
+                        Exit with a non-zero status if any operation fails
+                        (missing executable, lld failure, RPATH patching
+                        error).  [default: --hard-fail]
 ```
 
 ## Development

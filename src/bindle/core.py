@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import argparse
 import subprocess
 import shutil
@@ -53,8 +52,12 @@ def is_blacklisted(lib_name: str, blacklist: set[str]) -> bool:
     return False
 
 
-def patch_rpath(file_path: Path, rpath: str) -> None:
-    """Set the RPATH of an ELF file using patchelf."""
+def patch_rpath(file_path: Path, rpath: str, *, hard_fail: bool = True) -> None:
+    """Set the RPATH of an ELF file using patchelf.
+
+    When *hard_fail* is True, failures are raised as RuntimeError instead of
+    emitting a warning.
+    """
     try:
         subprocess.run(
             ["patchelf", "--set-rpath", rpath, str(file_path)],
@@ -63,10 +66,10 @@ def patch_rpath(file_path: Path, rpath: str) -> None:
             text=True,
         )
     except subprocess.CalledProcessError as e:
-        print(
-            f"Warning: Failed to patch RPATH for {file_path}. Error: {e.stderr}",
-            file=sys.stderr,
-        )
+        msg = f"Failed to patch RPATH for {file_path}. Error: {e.stderr}"
+        if hard_fail:
+            raise RuntimeError(msg) from e
+        print(f"Warning: {msg}", file=sys.stderr)
     except FileNotFoundError:
         print(
             "Error: 'patchelf' command not found. Please install it.", file=sys.stderr
@@ -74,8 +77,15 @@ def patch_rpath(file_path: Path, rpath: str) -> None:
         sys.exit(1)
 
 
-def build_distribution(executables: list[str], dest_dir: str) -> None:
-    """Package executables and their shared libraries into bin/ and lib/ dirs."""
+def build_distribution(
+    executables: list[str], dest_dir: str, *, hard_fail: bool = True
+) -> None:
+    """Package executables and their shared libraries into bin/ and lib/ dirs.
+
+    When *hard_fail* is True, any non-fatal warning (missing executable, ldd
+    failure, RPATH patching failure) is promoted to a RuntimeError and the
+    command aborts immediately.
+    """
     base_dest = Path(dest_dir)
     bin_dir = base_dest / "bin"
     lib_dir = base_dest / "lib"
@@ -89,7 +99,10 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
     for exe_path_str in executables:
         exe_path = Path(exe_path_str)
         if not exe_path.exists():
-            print(f"Warning: {exe_path} not found. Skipping.", file=sys.stderr)
+            msg = f"{exe_path} not found."
+            if hard_fail:
+                raise RuntimeError(msg)
+            print(f"Warning: {msg} Skipping.", file=sys.stderr)
             continue
 
         # 1. Copy the executable to the bin/ directory
@@ -105,7 +118,7 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
             continue
 
         # Patch executable RPATH to point to the adjacent lib/ folder ($ORIGIN/../lib)
-        patch_rpath(dest_exe, "$ORIGIN/../lib")
+        patch_rpath(dest_exe, "$ORIGIN/../lib", hard_fail=hard_fail)
 
         # 2. Extract dependencies using ldd
         try:
@@ -113,10 +126,10 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
                 ["ldd", exe_path_str], capture_output=True, text=True, check=True
             )
         except subprocess.CalledProcessError:
-            print(
-                f"Warning: ldd failed on {exe_path_str}. Is it a valid dynamic executable?",
-                file=sys.stderr,
-            )
+            msg = f"ldd failed on {exe_path_str}. Is it a valid dynamic executable?"
+            if hard_fail:
+                raise RuntimeError(msg)
+            print(f"Warning: {msg}", file=sys.stderr)
             continue
 
         for line in result.stdout.splitlines():
@@ -144,7 +157,7 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
 
             # Patch library RPATH to point to its own directory ($ORIGIN)
             # This ensures transitive dependencies are found locally.
-            patch_rpath(dest_lib, "$ORIGIN")
+            patch_rpath(dest_lib, "$ORIGIN", hard_fail=hard_fail)
             print(f"  -> Copied and patched library: {lib_name}")
 
 
@@ -167,10 +180,22 @@ def main() -> None:
         help="Destination directory path (will be created if it does not exist).",
     )
 
+    # Hard-fail mode: promote all warnings to errors (default: on)
+    parser.add_argument(
+        "--hard-fail",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Exit with a non-zero status if any operation fails (missing executable, lld failure, RPATH patching error).",
+    )
+
     args = parser.parse_args()
 
     print(f"Building distribution in '{args.output}'...")
-    build_distribution(args.executables, args.output)
+    try:
+        build_distribution(args.executables, args.output, hard_fail=args.hard_fail)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     print("\nPackaging complete!")
 
 
