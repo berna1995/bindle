@@ -102,4 +102,4 @@ uv run bindle <executables> -o <output>
 
 ## License
 
-MIT
+0BSD — Zero-Clause BSD License. See [LICENSE](LICENSE) for details.

@@ -7,13 +7,13 @@ requires-python = ">=3.13"
 authors = [
     { name = "Matteo Bernabito", email = "matteo@bernabito.it" },
 ]
-license = "MIT"
+license = "0BSD"
 keywords = ["elf", "bindle", "ldd", "rpath", "portable", "distribution"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: BSD Zero Clause License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Build Tools",
