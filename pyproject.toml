@@ -1,0 +1,24 @@
+[project]
+name = "packager"
+version = "0.1.0"
+description = "Bundle ELF executables and their dynamic library dependencies into portable directories"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Matteo Bernabito", email = "matteo@bernabito.it" },
+]
+license = "MIT"
+keywords = ["elf", "packaging", "ldd", "rpath", "portable", "distribution"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Software Distribution",
+]
+
+[project.scripts]
+packager = "packager.core:main"
