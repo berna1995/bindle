@@ -9,8 +9,14 @@ from pathlib import Path
 # Blacklist of core system libraries to avoid copying.
 # These will be loaded from the target system natively.
 CORE_BLACKLIST = {
-    'libc.so', 'libm.so', 'libpthread.so', 'libdl.so',
-    'librt.so', 'libgcc_s.so', 'libstdc++.so', 'ld-linux'
+    "libc.so",
+    "libm.so",
+    "libpthread.so",
+    "libdl.so",
+    "librt.so",
+    "libgcc_s.so",
+    "libstdc++.so",
+    "ld-linux",
 }
 
 
@@ -29,7 +35,7 @@ def is_pex(file_path: Path) -> bool:
     This is both O(1) in time and memory.
     """
     try:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             size = f.seek(0, os.SEEK_END)  # seek to end, get file size
             chunk_size = min(size, 4096)
             f.seek(-chunk_size, os.SEEK_END)
@@ -51,23 +57,28 @@ def patch_rpath(file_path: Path, rpath: str) -> None:
     """Set the RPATH of an ELF file using patchelf."""
     try:
         subprocess.run(
-            ['patchelf', '--set-rpath', rpath, str(file_path)],
+            ["patchelf", "--set-rpath", rpath, str(file_path)],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
         )
     except subprocess.CalledProcessError as e:
-        print(f"Warning: Failed to patch RPATH for {file_path}. Error: {e.stderr}", file=sys.stderr)
+        print(
+            f"Warning: Failed to patch RPATH for {file_path}. Error: {e.stderr}",
+            file=sys.stderr,
+        )
     except FileNotFoundError:
-        print("Error: 'patchelf' command not found. Please install it.", file=sys.stderr)
+        print(
+            "Error: 'patchelf' command not found. Please install it.", file=sys.stderr
+        )
         sys.exit(1)
 
 
 def build_distribution(executables: list[str], dest_dir: str) -> None:
     """Package executables and their shared libraries into bin/ and lib/ dirs."""
     base_dest = Path(dest_dir)
-    bin_dir = base_dest / 'bin'
-    lib_dir = base_dest / 'lib'
+    bin_dir = base_dest / "bin"
+    lib_dir = base_dest / "lib"
 
     # Create output directory structure
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -88,25 +99,32 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
 
         # Check if this is a PEX archive — patchelf would corrupt it
         if is_pex(dest_exe):
-            print(f"  -> Skipped patching: {exe_path.name} is a PEX archive (deps are self-contained)")
+            print(
+                f"  -> Skipped patching: {exe_path.name} is a PEX archive (deps are self-contained)"
+            )
             continue
 
         # Patch executable RPATH to point to the adjacent lib/ folder ($ORIGIN/../lib)
-        patch_rpath(dest_exe, '$ORIGIN/../lib')
+        patch_rpath(dest_exe, "$ORIGIN/../lib")
 
         # 2. Extract dependencies using ldd
         try:
-            result = subprocess.run(['ldd', exe_path_str], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                ["ldd", exe_path_str], capture_output=True, text=True, check=True
+            )
         except subprocess.CalledProcessError:
-            print(f"Warning: ldd failed on {exe_path_str}. Is it a valid dynamic executable?", file=sys.stderr)
+            print(
+                f"Warning: ldd failed on {exe_path_str}. Is it a valid dynamic executable?",
+                file=sys.stderr,
+            )
             continue
 
         for line in result.stdout.splitlines():
-            if '=>' not in line:
+            if "=>" not in line:
                 continue
 
-            parts = line.split('=>')
-            lib_path_str = parts[1].split('(')[0].strip()
+            parts = line.split("=>")
+            lib_path_str = parts[1].split("(")[0].strip()
 
             # Skip if empty or path does not exist
             if not lib_path_str or not os.path.exists(lib_path_str):
@@ -126,7 +144,7 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
 
             # Patch library RPATH to point to its own directory ($ORIGIN)
             # This ensures transitive dependencies are found locally.
-            patch_rpath(dest_lib, '$ORIGIN')
+            patch_rpath(dest_lib, "$ORIGIN")
             print(f"  -> Copied and patched library: {lib_name}")
 
 
@@ -138,16 +156,15 @@ def main() -> None:
 
     # Accept one or multiple positional arguments for executables
     parser.add_argument(
-        "executables",
-        nargs="+",
-        help="List of executable files to package."
+        "executables", nargs="+", help="List of executable files to package."
     )
 
     # Output directory via -o or --output
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         required=True,
-        help="Destination directory path (will be created if it does not exist)."
+        help="Destination directory path (will be created if it does not exist).",
     )
 
     args = parser.parse_args()
