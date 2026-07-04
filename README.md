@@ -10,6 +10,18 @@
 4. **Copy** the remaining shared libraries into `<output>/lib/`.
 5. **Patch** the RPATH of each executable to `$ORIGIN/../lib` and each library to `$ORIGIN`, so the bundle is fully relocatable.
 
+### PEX / scie support
+
+Executables built with the **PEX** (Python EXecutable) framework — in particular
+those bundled via **scie** (Science) — are automatically detected and handled
+specially.  These files embed their dependencies inside a zip archive appended
+to the ELF binary, and running `patchelf` on them would corrupt the archive.
+
+Detection reads the last 4 KiB of the file and looks for the `"scie"` and
+`"lift"` keys that appear in the scie manifest JSON.  PEX files are copied
+as-is without RPATH patching or `ldd` resolution, since they are fully
+self-contained.
+
 ## Requirements
 
 - **Linux** (uses `ldd` and ELF semantics)
@@ -55,6 +67,10 @@ ffmpeg-bundle/
 ```
 
 You can then copy the `ffmpeg-bundle` directory to another machine and run the executables directly — all libraries are resolved relative to the bundle.
+
+PEX / scie executables (e.g. a Python tool bundled via Pants or `pex --scie`)
+are copied into `bin/` as-is.  They are left untouched because their
+runtime dependencies are packed internally.
 
 ## CLI
 

@@ -14,6 +14,31 @@ CORE_BLACKLIST = {
 }
 
 
+def is_pex(file_path: Path) -> bool:
+    """Check if a file is a PEX (Python EXecutable) archive.
+
+    Modern PEX files built with the 'scie' framework embed their manifest
+    JSON (containing ``"scie"`` and ``"lift"`` keys) at the very end of
+    the executable.  Running patchelf on such files would corrupt the
+    embedded archive by modifying ELF section headers that the runtime
+    uses to locate the appended zip payload.
+
+    Detection reads at most the last 4 KiB of the file and checks for
+    the presence of both ``"scie"`` and ``"lift"`` — strings that are
+    unique to the scie manifest format and do not appear in regular ELFs.
+    This is both O(1) in time and memory.
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            size = f.seek(0, os.SEEK_END)  # seek to end, get file size
+            chunk_size = min(size, 4096)
+            f.seek(-chunk_size, os.SEEK_END)
+            tail = f.read()
+            return b'"scie"' in tail and b'"lift"' in tail
+    except (IOError, OSError):
+        return False
+
+
 def is_blacklisted(lib_name: str, blacklist: set[str]) -> bool:
     """Check if a library name starts with any string in the blacklist."""
     for item in blacklist:
@@ -60,6 +85,11 @@ def build_distribution(executables: list[str], dest_dir: str) -> None:
         dest_exe = bin_dir / exe_path.name
         shutil.copy2(exe_path, dest_exe)
         print(f"Copied executable: {exe_path.name}")
+
+        # Check if this is a PEX archive — patchelf would corrupt it
+        if is_pex(dest_exe):
+            print(f"  -> Skipped patching: {exe_path.name} is a PEX archive (deps are self-contained)")
+            continue
 
         # Patch executable RPATH to point to the adjacent lib/ folder ($ORIGIN/../lib)
         patch_rpath(dest_exe, '$ORIGIN/../lib')
