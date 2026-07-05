@@ -3,7 +3,7 @@ name = "bindle"
 version = "0.1.0"
 description = "Bundle ELF executables and their dynamic library dependencies into portable directories"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 authors = [
     { name = "Matteo Bernabito", email = "matteo@bernabito.it" },
 ]

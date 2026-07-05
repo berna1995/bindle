@@ -305,7 +305,7 @@ def main() -> None:
         default=[],
         help="Additional shared library to include (name or path). "
         "Accepts multiple values, e.g. -l libfoo.so libbar.so. "
-        "Useful for libraries loaded via dlopen at runtime. "
+        "Useful for libraries loaded via dlopen at runtime. ",
     )
 
     # Hard-fail mode: promote all warnings to errors (default: on)
