@@ -47,7 +47,7 @@ self-contained.
 ## Requirements
 
 - **Linux** (uses `ldd` and ELF semantics)
-- **Python 3.13+**
+- **Python 3.10+**
 - **patchelf** — install via your system package manager:
   ```bash
   # Debian / Ubuntu
