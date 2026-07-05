@@ -10,6 +10,28 @@
 4. **Copy** the remaining shared libraries into `<output>/lib/`.
 5. **Patch** the RPATH of each executable to `$ORIGIN/../lib` and each library to `$ORIGIN`, so the bundle is fully relocatable.
 
+### Custom libraries (dlopen)
+
+Some programs load shared libraries at runtime using ``dlopen`` instead of
+linking against them at build time. These libraries won't appear in the
+``ldd`` output and therefore won't be bundled automatically.
+
+Use the ``-l``/``--lib`` flag to explicitly include any additional
+libraries. It accepts multiple values, so shell globs like
+``-l /usr/lib/*.so`` work naturally:
+
+```bash
+# One library per flag
+bindle /usr/bin/myapp -o ./myapp-bundle -l libfoo.so.1 -l libbar.so.1
+
+# Multiple libraries in one flag (works with shell globs)
+bindle /usr/bin/myapp -o ./myapp-bundle -l /usr/lib/libfoo.so.1 /path/to/libbar.so
+```
+
+You can specify either bare sonames (resolved via ``ldconfig -p`` and common
+library directories) or full paths. Note that executables must be specified
+**before** the ``-l`` option.
+
 ### PEX / scie support
 
 Executables built with the **PEX** (Python EXecutable) framework — in particular
@@ -81,7 +103,8 @@ runtime dependencies are packed internally.
 ## CLI
 
 ```
-usage: bindle [-h] -o OUTPUT [--hard-fail | --no-hard-fail]
+usage: bindle [-h] -o OUTPUT [-l CUSTOM_LIBS [CUSTOM_LIBS ...]]
+              [--hard-fail | --no-hard-fail]
               executables [executables ...]
 
 Package executables and their dynamically linked libraries for distribution.
@@ -93,6 +116,12 @@ options:
   -h, --help            show this help message and exit
   -o, --output OUTPUT   Destination directory path (will be created if it does
                         not exist).
+  -l, --lib CUSTOM_LIBS [CUSTOM_LIBS ...]
+                        Additional shared library to include (name or path).
+                        Accepts multiple values per flag, e.g. -l libfoo.so
+                        libbar.so. Useful for libraries loaded via dlopen at
+                        runtime. Note: executables must be specified before
+                        this option.
   --hard-fail, --no-hard-fail
                         Exit with a non-zero status if any operation fails
                         (missing executable, lld failure, RPATH patching
