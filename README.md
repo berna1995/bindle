@@ -135,6 +135,21 @@ options:
 uv run bindle <executables> -o <output>
 ```
 
+### Testing
+
+```bash
+# Full suite (unit + Docker integration)
+uv run pytest tests/ -v
+
+# Unit tests only (no Docker required)
+uv run pytest tests/test_blacklist.py -v
+```
+
+Integration tests use Docker to verify bundles run correctly on a clean
+Ubuntu 24.04 image.  They test bundling and redeployment of a compiled test
+application as well as common Linux utilities (`ls`, `ssh`, `git`, `ffmpeg`,
+ImageMagick's `convert`).
+
 ## License
 
 0BSD — Zero-Clause BSD License. See [LICENSE](LICENSE) for details.

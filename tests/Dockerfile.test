@@ -1,0 +1,199 @@
+# Multi-stage Dockerfile for bindle integration tests.
+#
+# Usage (each --target is a self-contained test; exits non-zero on failure):
+#   docker build --target verify-blacklist  -f tests/Dockerfile.test .
+#   docker build --target test-run          -f tests/Dockerfile.test .
+#   docker build --target test-ls           -f tests/Dockerfile.test .
+#   docker build --target test-ssh          -f tests/Dockerfile.test .
+#   docker build --target test-git          -f tests/Dockerfile.test .
+#   docker build --target test-ffmpeg       -f tests/Dockerfile.test .
+#   docker build --target test-convert      -f tests/Dockerfile.test .
+
+# ------------------------------------------------------------------
+# Stage 1 — builder: install tools, compile testapp, create bundles
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    patchelf \
+    python3 \
+    python3-pip \
+    curl \
+    ca-certificates \
+    zlib1g-dev \
+    openssh-client \
+    git \
+    ffmpeg \
+    imagemagick \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+# Layer-cache friendly: copy metadata + src, install bindle
+COPY pyproject.toml uv.lock .python-version README.md ./
+COPY src/ src/
+COPY tests/ tests/
+RUN uv sync
+
+# Compile the test binary (links against libc and libz)
+RUN gcc -o /tmp/testapp tests/testapp.c -lz
+
+# Create bundles for each test scenario
+RUN uv run bindle /tmp/testapp    -o /tmp/bundle-testapp
+RUN uv run bindle /bin/ls         -o /tmp/bundle-ls
+RUN uv run bindle /usr/bin/ssh    -o /tmp/bundle-ssh
+RUN uv run bindle /usr/bin/git    -o /tmp/bundle-git
+RUN uv run bindle /usr/bin/ffmpeg -o /tmp/bundle-ffmpeg
+RUN uv run bindle /usr/bin/convert -o /tmp/bundle-convert
+
+# ------------------------------------------------------------------
+# Stage 2 — verify-blacklist: check which libs were / were not copied
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS verify-blacklist
+
+COPY --from=builder /tmp/bundle-testapp /bundle
+
+RUN test -f /bundle/bin/testapp
+RUN test -d /bundle/lib
+
+# These MUST NOT be in the bundle — they are blacklisted core system libs
+RUN test ! -e /bundle/lib/libc.so.6
+RUN test ! -e /bundle/lib/libm.so.6
+RUN test ! -e /bundle/lib/libpthread.so.0
+RUN test ! -e /bundle/lib/libdl.so.2
+RUN test ! -e /bundle/lib/librt.so.1
+RUN test ! -e /bundle/lib/libgcc_s.so.1
+RUN test ! -e /bundle/lib/libstdc++.so.6
+RUN test ! -e /bundle/lib/libresolv.so.2
+RUN sh -c 'test ! -e /bundle/lib/ld-linux-x86-64.so.2'
+RUN test ! -e /bundle/lib/libanl.so.1
+RUN test ! -e /bundle/lib/libBrokenLocale.so.1
+RUN test ! -e /bundle/lib/libnsl.so.1
+RUN test ! -e /bundle/lib/libutil.so.1
+
+# This one SHOULD be in the bundle — it is NOT blacklisted
+RUN test -f /bundle/lib/libz.so.1
+
+# ------------------------------------------------------------------
+# Stage 3 — test-run: execute the bundled testapp in a clean env
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-run
+
+COPY --from=builder /tmp/bundle-testapp /bundle
+RUN /bundle/bin/testapp
+
+# ------------------------------------------------------------------
+# Stage 4 — test-ls: bundle and run /bin/ls
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-ls
+
+COPY --from=builder /tmp/bundle-ls /bundle
+
+# Verify structure
+RUN test -f /bundle/bin/ls
+RUN test -d /bundle/lib
+
+# Blacklisted libs must be absent
+RUN test ! -e /bundle/lib/libc.so.6
+RUN test ! -e /bundle/lib/libresolv.so.2
+
+# Non-blacklisted deps (pcre2, selinux) must be present
+RUN test -f /bundle/lib/libpcre2-8.so.0
+RUN test -f /bundle/lib/libselinux.so.1
+
+# Must produce expected output
+RUN /bundle/bin/ls /tmp | :
+
+# ------------------------------------------------------------------
+# Stage 5 — test-ssh: bundle and run /usr/bin/ssh -V
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-ssh
+
+COPY --from=builder /tmp/bundle-ssh /bundle
+
+RUN test -f /bundle/bin/ssh
+RUN test -d /bundle/lib
+
+# libresolv (newly blacklisted) must NOT be bundled
+RUN test ! -e /bundle/lib/libresolv.so.2
+RUN test ! -e /bundle/lib/libc.so.6
+
+# At least some non-blacklisted libraries must have been bundled
+RUN test -n "$(find /bundle/lib -maxdepth 1 -name '*.so*' -print -quit)"
+
+# ssh -V prints version to stderr and exits 0
+RUN /bundle/bin/ssh -V 2>&1 | grep -q OpenSSH
+
+# ------------------------------------------------------------------
+# Stage 6 — test-git: bundle and run /usr/bin/git --version
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-git
+
+COPY --from=builder /tmp/bundle-git /bundle
+
+RUN test -f /bundle/bin/git
+RUN test -d /bundle/lib
+
+# libc must be absent (blacklisted)
+RUN test ! -e /bundle/lib/libc.so.6
+
+# At least some non-blacklisted libraries must have been bundled
+RUN test -n "$(find /bundle/lib -maxdepth 1 -name '*.so*' -print -quit)"
+
+# git --version prints version and exits 0
+RUN /bundle/bin/git --version | grep -q "git version"
+
+# ------------------------------------------------------------------
+# Stage 7 — test-ffmpeg: bundle and run /usr/bin/ffmpeg -version
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-ffmpeg
+
+COPY --from=builder /tmp/bundle-ffmpeg /bundle
+
+RUN test -f /bundle/bin/ffmpeg
+RUN test -d /bundle/lib
+
+# Core blacklisted libs must be absent (system provides them)
+RUN test ! -e /bundle/lib/libc.so.6
+RUN test ! -e /bundle/lib/libm.so.6
+RUN test ! -e /bundle/lib/libstdc++.so.6
+RUN test ! -e /bundle/lib/libgcc_s.so.1
+RUN test ! -e /bundle/lib/libresolv.so.2
+
+# Representative non-blacklisted codec libs must be bundled
+RUN test -f /bundle/lib/libx264.so.164
+RUN test -f /bundle/lib/libmp3lame.so.0
+RUN test -f /bundle/lib/libvorbis.so.0
+RUN test -f /bundle/lib/libopus.so.0
+
+# At least some libraries were bundled (smoke check)
+RUN test -n "$(find /bundle/lib -maxdepth 1 -name '*.so*' -print -quit)"
+
+# ffmpeg -version prints version banner and exits 0
+RUN /bundle/bin/ffmpeg -version 2>&1 | grep -q "ffmpeg version"
+
+# ------------------------------------------------------------------
+# Stage 8 — test-convert: bundle and run /usr/bin/convert --version
+# ------------------------------------------------------------------
+FROM ubuntu:24.04 AS test-convert
+
+COPY --from=builder /tmp/bundle-convert /bundle
+
+RUN test -f /bundle/bin/convert
+RUN test -d /bundle/lib
+
+# Core blacklisted libs must be absent
+RUN test ! -e /bundle/lib/libc.so.6
+RUN test ! -e /bundle/lib/libm.so.6
+RUN test ! -e /bundle/lib/libgcc_s.so.1
+
+# At least some non-blacklisted image-processing libs must be bundled
+RUN test -n "$(find /bundle/lib -maxdepth 1 -name '*.so*' -print -quit)"
+
+# convert --version prints version and exits 0
+RUN /bundle/bin/convert --version 2>&1 | grep -q ImageMagick

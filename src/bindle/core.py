@@ -8,14 +8,19 @@ from pathlib import Path
 # Blacklist of core system libraries to avoid copying.
 # These will be loaded from the target system natively.
 CORE_BLACKLIST = {
-    "libc.so",
-    "libm.so",
-    "libpthread.so",
-    "libdl.so",
-    "librt.so",
-    "libgcc_s.so",
-    "libstdc++.so",
     "ld-linux",
+    "libanl.so",
+    "libBrokenLocale.so",
+    "libc.so",
+    "libdl.so",
+    "libgcc_s.so",
+    "libm.so",
+    "libnsl.so",
+    "libpthread.so",
+    "libresolv.so",
+    "librt.so",
+    "libstdc++.so",
+    "libutil.so",
 }
 
 
